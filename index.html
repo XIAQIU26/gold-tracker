@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>金子记录器 · 多账户版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    input, select, button { margin: 5px 0; padding: 8px; width: 100%; }
+    .section { margin-bottom: 30px; }
+    .record { background: #f9f9f9; padding: 10px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 5px; }
+    canvas { width: 100%; height: 300px; }
+  </style>
+</head>
+<body>
+  <h1>金子记录器 · 多账户版</h1>
+
+  <div class="section">
+    <h2>账户管理</h2>
+    <select id="accountSelector" onchange="switchAccount()"></select>
+    <input id="newAccount" placeholder="新账户名" />
+    <button onclick="createAccount()">添加账户</button>
+    <button onclick="deleteAccount()">删除当前账户</button>
+  </div>
+
+  <div class="section">
+    <h2>买入</h2>
+    <input id="buyWeight" type="number" placeholder="重量 (克)">
+    <input id="buyPrice" type="number" placeholder="单价 (元/克)">
+    <button onclick="buy()">确认买入</button>
+  </div>
+
+  <div class="section">
+    <h2>卖出</h2>
+    <input id="sellWeight" type="number" placeholder="重量 (克)">
+    <input id="sellPrice" type="number" placeholder="单价 (元/克)">
+    <button onclick="sell()">确认卖出</button>
+  </div>
+
+  <div class="section">
+    <h2>当前持仓</h2>
+    <div id="holdings"></div>
+  </div>
+
+  <div class="section">
+    <h2>卖出记录 + 总收益</h2>
+    <div id="history"></div>
+  </div>
+
+  <div class="section">
+    <h2>收益折线图</h2>
+    <canvas id="profitChart" width="400" height="300"></canvas>
+  </div>
+
+<script>
+let db = JSON.parse(localStorage.getItem('gold_accounts') || '{}');
+let current = localStorage.getItem('gold_current') || '默认账户';
+if (!db[current]) db[current] = { buys: [], sells: [] };
+saveAll();
+
+function saveAll() {
+  localStorage.setItem('gold_accounts', JSON.stringify(db));
+  localStorage.setItem('gold_current', current);
+}
+
+function refreshAccounts() {
+  const sel = document.getElementById('accountSelector');
+  sel.innerHTML = '';
+  for (let name in db) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    if (name === current) option.selected = true;
+    sel.appendChild(option);
+  }
+}
+
+function switchAccount() {
+  const sel = document.getElementById('accountSelector');
+  current = sel.value;
+  if (!db[current]) db[current] = { buys: [], sells: [] };
+  saveAll();
+  renderAll();
+}
+
+function createAccount() {
+  const name = document.getElementById('newAccount').value.trim();
+  if (!name) return alert('请输入账户名');
+  if (db[name]) return alert('账户已存在');
+  db[name] = { buys: [], sells: [] };
+  current = name;
+  saveAll();
+  refreshAccounts();
+  renderAll();
+}
+
+function deleteAccount() {
+  if (Object.keys(db).length === 1) return alert('至少保留一个账户');
+  if (confirm(`确定删除账户「${current}」吗？此操作无法撤销`)) {
+    delete db[current];
+    current = Object.keys(db)[0];
+    saveAll();
+    refreshAccounts();
+    renderAll();
+  }
+}
+
+function buy() {
+  const weight = parseFloat(document.getElementById('buyWeight').value);
+  const price = parseFloat(document.getElementById('buyPrice').value);
+  if (isNaN(weight) || isNaN(price)) return alert('请输入有效数值');
+  db[current].buys.push({ weight, price, time: Date.now() });
+  saveAll();
+  renderAll();
+}
+
+function sell() {
+  let weight = parseFloat(document.getElementById('sellWeight').value);
+  const price = parseFloat(document.getElementById('sellPrice').value);
+  if (isNaN(weight) || isNaN(price)) return alert('请输入有效数值');
+  let profit = 0, buys = db[current].buys;
+  let sold = [];
+
+  while (weight > 0 && buys.length > 0) {
+    const b = buys[0];
+    if (b.weight <= weight) {
+      profit += (price - b.price) * b.weight;
+      sold.push({ ...b, sellWeight: b.weight, sellPrice: price });
+      weight -= b.weight;
+      buys.shift();
+    } else {
+      profit += (price - b.price) * weight;
+      b.weight -= weight;
+      sold.push({ ...b, sellWeight: weight, sellPrice: price });
+      weight = 0;
+    }
+  }
+
+  db[current].sells.push({ time: Date.now(), profit: profit.toFixed(2), details: sold });
+  saveAll();
+  alert(`卖出成功，利润：${profit.toFixed(2)} 元`);
+  renderAll();
+}
+
+function renderHoldings() {
+  const h = document.getElementById('holdings');
+  const buys = db[current].buys;
+  if (buys.length === 0) return h.innerHTML = '暂无持仓';
+  h.innerHTML = buys.map((b, i) => {
+    const days = Math.floor((Date.now() - b.time) / 86400000);
+    return `<div class="record">#${i+1} - ${b.weight} 克 @${b.price} 元/克 ｜ 已持有 ${days} 天</div>`;
+  }).join('');
+}
+
+function renderHistory() {
+  const h = document.getElementById('history');
+  const sells = db[current].sells;
+  let total = 0;
+  if (sells.length === 0) return h.innerHTML = '暂无卖出记录';
+  const list = sells.map((s, i) => {
+    total += parseFloat(s.profit);
+    return `<div class="record">#${i+1} 卖出收益：${s.profit} 元</div>`;
+  });
+  h.innerHTML = `<b>总收益：${total.toFixed(2)} 元</b><br><br>` + list.join('');
+}
+
+function drawChart() {
+  const canvas = document.getElementById('profitChart');
+  const ctx = canvas.getContext('2d');
+  const sells = db[current].sells;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (sells.length === 0) return;
+  const profits = sells.map(s => parseFloat(s.profit));
+  const max = Math.max(...profits), min = Math.min(...profits), range = max - min || 1;
+  ctx.beginPath();
+  profits.forEach((p, i) => {
+    const x = (i / (profits.length - 1)) * canvas.width;
+    const y = canvas.height - ((p - min) / range) * canvas.height;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = 'green';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function renderAll() {
+  refreshAccounts();
+  renderHoldings();
+  renderHistory();
+  drawChart();
+}
+renderAll();
+</script>
+</body>
+</html>
