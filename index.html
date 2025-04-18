@@ -3,7 +3,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>金子记录器 · 多账户版</title>
+  <title>金子记录器 · 完整终极版</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: sans-serif; margin: 20px; }
@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-  <h1>金子记录器 · 多账户版</h1>
+  <h1>金子记录器 · 多账户完整版</h1>
 
   <div class="section">
     <h2>账户管理</h2>
@@ -23,11 +23,12 @@
     <button onclick="createAccount()">添加账户</button>
     <button onclick="deleteAccount()">删除当前账户</button>
   </div>
-
   <div class="section">
     <h2>买入</h2>
     <input id="buyWeight" type="number" placeholder="重量 (克)">
     <input id="buyPrice" type="number" placeholder="单价 (元/克)">
+    <input id="buyDate" type="date">
+    <input id="buyNote" type="text" placeholder="备注 (可选)">
     <button onclick="buy()">确认买入</button>
   </div>
 
@@ -52,7 +53,6 @@
     <h2>收益折线图</h2>
     <canvas id="profitChart" width="400" height="300"></canvas>
   </div>
-
 <script>
 let db = JSON.parse(localStorage.getItem('gold_accounts') || '{}');
 let current = localStorage.getItem('gold_current') || '默认账户';
@@ -109,8 +109,13 @@ function deleteAccount() {
 function buy() {
   const weight = parseFloat(document.getElementById('buyWeight').value);
   const price = parseFloat(document.getElementById('buyPrice').value);
+  const dateInput = document.getElementById('buyDate').value;
+  const note = document.getElementById('buyNote').value.trim();
+  let time = dateInput ? new Date(dateInput).getTime() : Date.now();
+  
   if (isNaN(weight) || isNaN(price)) return alert('请输入有效数值');
-  db[current].buys.push({ weight, price, time: Date.now() });
+  
+  db[current].buys.push({ weight, price, time, note });
   saveAll();
   renderAll();
 }
@@ -149,7 +154,8 @@ function renderHoldings() {
   if (buys.length === 0) return h.innerHTML = '暂无持仓';
   h.innerHTML = buys.map((b, i) => {
     const days = Math.floor((Date.now() - b.time) / 86400000);
-    return `<div class="record">#${i+1} - ${b.weight} 克 @${b.price} 元/克 ｜ 已持有 ${days} 天</div>`;
+    const dateStr = new Date(b.time).toLocaleDateString();
+    return `<div class="record">#${i+1} - ${b.weight} 克 @${b.price} 元/克 ｜ 持有 ${days} 天 （买入：${dateStr}）<br>备注：${b.note || '无'}</div>`;
   }).join('');
 }
 
@@ -160,7 +166,8 @@ function renderHistory() {
   if (sells.length === 0) return h.innerHTML = '暂无卖出记录';
   const list = sells.map((s, i) => {
     total += parseFloat(s.profit);
-    return `<div class="record">#${i+1} 卖出收益：${s.profit} 元</div>`;
+    const sellDate = new Date(s.time).toLocaleDateString();
+    return `<div class="record">#${i+1} 卖出收益：${s.profit} 元 ｜ 卖出日期：${sellDate}</div>`;
   });
   h.innerHTML = `<b>总收益：${total.toFixed(2)} 元</b><br><br>` + list.join('');
 }
@@ -181,17 +188,4 @@ function drawChart() {
     else ctx.lineTo(x, y);
   });
   ctx.strokeStyle = 'green';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-}
-
-function renderAll() {
-  refreshAccounts();
-  renderHoldings();
-  renderHistory();
-  drawChart();
-}
-renderAll();
-</script>
-</body>
-</html>
+  ctx.lineWidth =
