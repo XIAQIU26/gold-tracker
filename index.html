@@ -53,6 +53,12 @@
     <h2>收益折线图</h2>
     <canvas id="profitChart" width="400" height="300"></canvas>
   </div>
+
+  <div class="section">
+    <h2>数据备份</h2>
+    <button onclick="exportData()">导出备份文件</button><br><br>
+    <input type="file" id="importFile" onchange="importData()" />
+  </div>
 <script>
 let db = JSON.parse(localStorage.getItem('gold_accounts') || '{}');
 let current = localStorage.getItem('gold_current') || '默认账户';
@@ -158,7 +164,6 @@ function renderHoldings() {
     return `<div class="record">#${i+1} - ${b.weight} 克 @${b.price} 元/克 ｜ 持有 ${days} 天 （买入：${dateStr}）<br>备注：${b.note || '无'}</div>`;
   }).join('');
 }
-
 function renderHistory() {
   const h = document.getElementById('history');
   const sells = db[current].sells;
@@ -188,4 +193,52 @@ function drawChart() {
     else ctx.lineTo(x, y);
   });
   ctx.strokeStyle = 'green';
-  ctx.lineWidth =
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function exportData() {
+  const dataStr = JSON.stringify(db, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'gold_backup.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData() {
+  const file = document.getElementById('importFile').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (typeof imported === 'object') {
+        db = imported;
+        current = Object.keys(db)[0] || '默认账户';
+        saveAll();
+        renderAll();
+        alert('✅ 数据导入成功！');
+      } else {
+        alert('❌ 不是有效的数据文件');
+      }
+    } catch (err) {
+      alert('❌ 读取文件出错');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function renderAll() {
+  refreshAccounts();
+  renderHoldings();
+  renderHistory();
+  drawChart();
+}
+renderAll();
+</script>
+</body>
+</html>
+
