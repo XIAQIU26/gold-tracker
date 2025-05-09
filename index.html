@@ -1,12 +1,8 @@
-
-# 生成包含【删除买入记录功能】的最终版 index.html
-
-final_with_delete_html = """
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>金子记录器 · 完整版（带删除功能）</title>
+  <title>金子记录器 · 完整版（买入卖出可删除）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: sans-serif; margin: 20px; }
@@ -64,7 +60,6 @@ final_with_delete_html = """
     <button onclick="exportData()">导出备份文件</button><br><br>
     <input type="file" id="importFile" onchange="importData()" />
   </div>
-
 <script>
 let db = JSON.parse(localStorage.getItem('gold_accounts') || '{}');
 let current = localStorage.getItem('gold_current') || '默认账户';
@@ -124,9 +119,7 @@ function buy() {
   const dateInput = document.getElementById('buyDate').value;
   const note = document.getElementById('buyNote').value.trim();
   let time = dateInput ? new Date(dateInput).getTime() : Date.now();
-  
   if (isNaN(weight) || isNaN(price)) return alert('请输入有效数值');
-  
   db[current].buys.push({ weight, price, time, note });
   saveAll();
   renderAll();
@@ -138,7 +131,6 @@ function sell() {
   if (isNaN(weight) || isNaN(price)) return alert('请输入有效数值');
   let profit = 0, buys = db[current].buys;
   let sold = [];
-
   while (weight > 0 && buys.length > 0) {
     const b = buys[0];
     if (b.weight <= weight) {
@@ -153,13 +145,11 @@ function sell() {
       weight = 0;
     }
   }
-
   db[current].sells.push({ time: Date.now(), profit: profit.toFixed(2), details: sold });
   saveAll();
   alert(`卖出成功，利润：${profit.toFixed(2)} 元`);
   renderAll();
 }
-
 function renderHoldings() {
   const h = document.getElementById('holdings');
   const buys = db[current].buys;
@@ -167,7 +157,7 @@ function renderHoldings() {
   h.innerHTML = buys.map((b, i) => {
     const days = Math.floor((Date.now() - b.time) / 86400000);
     const dateStr = new Date(b.time).toLocaleDateString();
-    return `<div class="record">#${i+1} - ${b.weight} 克 @${b.price} 元/克 ｜ 持有 ${days} 天（买入：${dateStr}）<br>备注：${b.note || '无'}<br><button class="delete-btn" onclick="deleteBuy(${i})">❌ 删除</button></div>`;
+    return `<div class="record">#${i+1} - ${b.weight} 克 @${b.price} 元/克 ｜ 持有 ${days} 天（买入：${dateStr}）<br>备注：${b.note || '无'}<br><button class="delete-btn" onclick="deleteBuy(${i})">❌ 删除买入</button></div>`;
   }).join('');
 }
 
@@ -187,9 +177,17 @@ function renderHistory() {
   const list = sells.map((s, i) => {
     total += parseFloat(s.profit);
     const sellDate = new Date(s.time).toLocaleDateString();
-    return `<div class="record">#${i+1} 卖出收益：${s.profit} 元 ｜ 卖出日期：${sellDate}</div>`;
+    return `<div class="record">#${i+1} 卖出收益：${s.profit} 元 ｜ 卖出日期：${sellDate}<br><button class="delete-btn" onclick="deleteSell(${i})">❌ 删除卖出</button></div>`;
   });
   h.innerHTML = `<b>总收益：${total.toFixed(2)} 元</b><br><br>` + list.join('');
+}
+
+function deleteSell(index) {
+  if (confirm('确定要删除这一笔卖出记录吗？')) {
+    db[current].sells.splice(index, 1);
+    saveAll();
+    renderAll();
+  }
 }
 
 function drawChart() {
@@ -256,11 +254,6 @@ renderAll();
 </script>
 </body>
 </html>
-"""
 
-# 保存到本地
-with open('/mnt/data/index_final_with_delete.html', 'w', encoding='utf-8') as f:
-    f.write(final_with_delete_html)
 
-'/mnt/data/index_final_with_delete.html'
 
